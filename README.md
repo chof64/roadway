@@ -113,8 +113,7 @@ and contracts a static CH graph. The final image does not contain the source
 PBF. The Photon build downloads the current Philippines dump and creates a
 reverse-only English index by default.
 
-For reproducible scheduled builds, pass a data version and checksum from the
-workflow:
+For a checksum-pinned build, pass a data version and checksum explicitly:
 
 ```sh
 docker build \
@@ -132,9 +131,28 @@ docker build \
   photon
 ```
 
-Do not use `latest` as the deployed tag. Publish an immutable date or source
-timestamp tag, smoke-test both containers, then deploy that tag to the calling
-application.
+The date tag is the reproducible deployment pin. The automated workflow also
+publishes `latest` as a convenience pointer, so deployments can either pin a
+CalVer or deliberately follow the most recent weekly build.
+
+## GitHub Actions publishing
+
+The `Build and publish roadway images` workflow runs every Monday at 02:17 UTC
+and can also be started manually. Each run builds and publishes both images to
+GHCR using a UTC CalVer tag in the form `YYYY.MM.DD`, plus `latest`:
+
+```text
+ghcr.io/<owner>/roadway-osrm:2026.09.01
+ghcr.io/<owner>/roadway-osrm:latest
+ghcr.io/<owner>/roadway-photon:2026.09.01
+ghcr.io/<owner>/roadway-photon:latest
+```
+
+The workflow uses the GitHub-provided token, so the repository must have
+Actions permission to write packages. A manual run may provide a CalVer
+override when a date tag needs to be rebuilt. The Photon CalVer is passed as
+`PHOTON_DATA_VERSION` so the scheduled run does not reuse the import layer for
+the remote `latest` dump. The OSRM and Photon jobs use separate Buildx caches.
 
 ## Runtime notes
 
