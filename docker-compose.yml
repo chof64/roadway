@@ -1,0 +1,18 @@
+services:
+  osrm:
+    image: ghcr.io/chof64/roadway-osrm:local
+    build:
+      context: ./osrm
+      dockerfile: Dockerfile
+    expose:
+      - "5000"
+    restart: unless-stopped
+
+  photon:
+    image: ghcr.io/chof64/roadway-photon:local
+    build:
+      context: ./photon
+      dockerfile: Dockerfile
+    expose:
+      - "2322"
+    restart: unless-stopped

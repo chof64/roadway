@@ -1,0 +1,10 @@
+# Local build output and downloaded source data
+*.osm.pbf
+*.jsonl.zst
+photon/data/
+osrm/data/
+
+# Local environment files
+.env
+.env.*
+!.env.example
