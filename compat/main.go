@@ -31,7 +31,11 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler)
 	mux.HandleFunc("/readyz", app.readyHandler)
-	mux.HandleFunc("/ors/v2/directions/driving-car", app.directionsHandler)
+	for _, profile := range supportedProfiles {
+		mux.HandleFunc("/ors/v2/directions/"+profile, app.directionsHandler)
+		mux.HandleFunc("/ors/v2/matrix/"+profile, app.matrixHandler)
+		mux.HandleFunc("/ors/v2/snap/"+profile, app.snapHandler)
+	}
 
 	server := &http.Server{
 		Addr:              getenv("LISTEN_ADDR", ":8080"),
@@ -110,8 +114,8 @@ func (app *application) readyHandler(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) directionsHandler(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 		writeError(w, http.StatusMethodNotAllowed, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
@@ -121,6 +125,7 @@ func (app *application) directionsHandler(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, http.StatusBadRequest, err.Error())
 		return
 	}
+	parsed.Profile = profileFromPath(r.URL.Path)
 
 	upstreamRequest, err := http.NewRequestWithContext(r.Context(), http.MethodGet, buildOSRMURL(app.upstream, parsed).String(), nil)
 	if err != nil {
@@ -176,6 +181,122 @@ func (app *application) directionsHandler(w http.ResponseWriter, r *http.Request
 	}
 	log.Printf("route status=200 duration_ms=%d", time.Since(started).Milliseconds())
 	writeJSON(w, http.StatusOK, translated, "application/geo+json; charset=UTF-8")
+}
+
+func (app *application) matrixHandler(w http.ResponseWriter, r *http.Request) {
+	profile := profileFromPath(r.URL.Path)
+	parsed, err := parseMatrixRequest(r, profile)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	upstreamRequest, err := http.NewRequestWithContext(r.Context(), http.MethodGet, buildTableURL(app.upstream, parsed).String(), nil)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, http.StatusBadGateway, "failed to build OSRM table request")
+		return
+	}
+	if requestID := r.Header.Get("X-Request-ID"); requestID != "" {
+		upstreamRequest.Header.Set("X-Request-ID", requestID)
+	}
+	status, body, err := app.fetchUpstream(upstreamRequest)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, http.StatusBadGateway, "OSRM upstream request failed")
+		return
+	}
+	if status < 200 || status >= 300 {
+		writeError(w, http.StatusBadGateway, status, "OSRM upstream returned an error")
+		return
+	}
+
+	var upstream OSRMTableResponse
+	if err := json.Unmarshal(body, &upstream); err != nil {
+		writeError(w, http.StatusBadGateway, http.StatusBadGateway, "invalid OSRM upstream JSON")
+		return
+	}
+	if upstream.Code != "Ok" {
+		message := upstream.Message
+		if message == "" {
+			message = "OSRM table request failed"
+		}
+		writeError(w, http.StatusBadGateway, http.StatusBadGateway, message)
+		return
+	}
+	writeJSON(w, http.StatusOK, translateMatrix(upstream, parsed), "application/json")
+}
+
+func (app *application) snapHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeError(w, http.StatusMethodNotAllowed, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	parsed, err := parseSnapRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	waypoints := make([]OSRMWaypoint, len(parsed.Locations))
+	for index, location := range parsed.Locations {
+		upstreamRequest, err := http.NewRequestWithContext(r.Context(), http.MethodGet, buildNearestURL(app.upstream, location).String(), nil)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, http.StatusBadGateway, "failed to build OSRM nearest request")
+			return
+		}
+		if requestID := r.Header.Get("X-Request-ID"); requestID != "" {
+			upstreamRequest.Header.Set("X-Request-ID", requestID)
+		}
+		status, body, err := app.fetchUpstream(upstreamRequest)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, http.StatusBadGateway, "OSRM upstream request failed")
+			return
+		}
+		if status < 200 || status >= 300 {
+			writeError(w, http.StatusBadGateway, status, "OSRM upstream returned an error")
+			return
+		}
+
+		var upstream OSRMResponse
+		if err := json.Unmarshal(body, &upstream); err != nil {
+			writeError(w, http.StatusBadGateway, http.StatusBadGateway, "invalid OSRM upstream JSON")
+			return
+		}
+		if upstream.Code != "Ok" || len(upstream.Waypoints) == 0 {
+			message := upstream.Message
+			if message == "" {
+				message = "OSRM nearest request failed"
+			}
+			writeError(w, http.StatusBadGateway, http.StatusBadGateway, message)
+			return
+		}
+		waypoint := upstream.Waypoints[0]
+		if waypoint.Distance > parsed.Radius {
+			waypoint.Location = nil
+		}
+		waypoints[index] = waypoint
+	}
+
+	translated, err := translateSnap(OSRMResponse{Waypoints: waypoints})
+	if err != nil {
+		writeError(w, http.StatusBadGateway, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, translated, "application/json")
+}
+
+func (app *application) fetchUpstream(request *http.Request) (int, []byte, error) {
+	response, err := app.client.Do(request)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxUpstreamResponseBytes+1))
+	if err != nil || len(body) > maxUpstreamResponseBytes {
+		return 0, nil, fmt.Errorf("invalid upstream response")
+	}
+	return response.StatusCode, body, nil
 }
 
 func writeError(w http.ResponseWriter, status, code int, message string) {

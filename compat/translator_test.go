@@ -21,7 +21,7 @@ func TestParseRouteRequest(t *testing.T) {
 }
 
 func TestParseRouteRequestRejectsUnsupportedParameter(t *testing.T) {
-	request := httptest.NewRequest("GET", "/ors/v2/directions/driving-car?start=121.056,14.676&end=121.058,14.678&preference=fastest", nil)
+	request := httptest.NewRequest("GET", "/ors/v2/directions/driving-car?start=121.056,14.676&end=121.058,14.678&preference=shortest", nil)
 	if _, err := parseRouteRequest(request); err == nil {
 		t.Fatal("expected unsupported parameter error")
 	}

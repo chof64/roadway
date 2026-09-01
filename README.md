@@ -14,7 +14,7 @@ containers:
 The application should call these through an internal adapter or facade:
 
 ```text
-Routing application -> /ors/v2/directions/driving-car -> roadway-ors-compat:8080
+Routing application -> /ors/v2/directions/{profile} -> roadway-ors-compat:8080
 roadway-ors-compat -> /route -> roadway-osrm:5000
 Routing application -> /reverse       -> roadway-photon:2322
 ```
@@ -31,9 +31,20 @@ Photon base URL: http://photon:2322
 
 ### Temporary ORS compatibility sidecar
 
-`ors-compat` preserves the restricted directions contract while the application
-migrates away from the existing ORS-shaped response. It accepts the restricted
-GET form below and translates it to a native OSRM route request:
+`ors-compat` preserves the ORS-shaped routing contract while the application
+migrates away from the existing ORS engine. It accepts the driving-car and
+cycling-electric profiles used by Xicar, mapping both to the one configured
+driving OSRM instance. It supports POST directions requests from the backend:
+
+```text
+POST http://ors-compat:8080/ors/v2/directions/driving-car
+POST http://ors-compat:8080/ors/v2/directions/cycling-electric
+Content-Type: application/json
+
+{"coordinates":[[<longitude>,<latitude>],[<longitude>,<latitude>]],"instructions":false}
+```
+
+The legacy GET form remains available for simple start/end requests:
 
 ```text
 GET http://ors-compat:8080/ors/v2/directions/driving-car
@@ -46,10 +57,12 @@ GET http://ors-compat:8080/ors/v2/directions/driving-car
 The sidecar has no routing-flavor selector. `OSRM_UPSTREAM_URL` is the only
 upstream setting, so one selected OSRM instance can be placed behind it at a
 time. The adapter preserves the ORS GeoJSON response shape for route geometry,
-summary, segments, and waypoints; route values can still differ from the old
-service when the underlying graph or routing engine differs. Unsupported query
-parameters and geometry formats return a clear client error rather than being
-silently ignored.
+summary, segments, and waypoints. It also includes a legacy `routes[0]` view
+with an encoded polyline for the ride-share path in the current backend. Matrix
+and snap requests are translated to OSRM table and nearest requests as well.
+Route values can still differ from the old service when the underlying graph or
+routing engine differs. Both incoming profiles intentionally use the driving
+OSRM graph during this migration.
 
 The sidecar is a migration aid, not a permanent public API. Once clients use a
 native internal facade or OSRM directly, remove the `ors-compat` service and
