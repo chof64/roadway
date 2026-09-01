@@ -47,23 +47,40 @@ jobs:
           echo "Publishing CalVer: ${calver}"
           echo "calver=${calver}" >> "${GITHUB_OUTPUT}"
 
+  smoke:
+    name: Validate OSRM profile variants
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run OSRM profile smoke test
+        run: bash osrm/tests/smoke.sh
+
   build:
-    name: Build ${{ matrix.service }}
-    needs: release
+    name: Build ${{ matrix.service }}${{ matrix.variant != 'default' && format(' ({0})', matrix.variant) || '' }}
+    needs: [release, smoke]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - service: osrm
+            variant: restrictive
             context: ./osrm
             dockerfile: ./osrm/Dockerfile
           - service: photon
+            variant: default
             context: ./photon
             dockerfile: ./photon/Dockerfile
           - service: ors-compat
+            variant: default
             context: ./compat
             dockerfile: ./compat/Dockerfile
+          - service: osrm
+            variant: permissive
+            context: ./osrm
+            dockerfile: ./osrm/Dockerfile
 
     steps:
       - name: Check out repository
@@ -96,11 +113,14 @@ jobs:
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
-            type=raw,value=${{ needs.release.outputs.calver }}
-            type=raw,value=latest
+            type=raw,value=${{ needs.release.outputs.calver }},enable=${{ matrix.service != 'osrm' || matrix.variant == 'restrictive' }}
+            type=raw,value=latest,enable=${{ matrix.service != 'osrm' || matrix.variant == 'restrictive' }}
+            type=raw,value=${{ needs.release.outputs.calver }}-${{ matrix.variant }},enable=${{ matrix.service == 'osrm' }}
+            type=raw,value=${{ matrix.variant }},enable=${{ matrix.service == 'osrm' }}
           labels: |
             org.opencontainers.image.title=roadway-${{ matrix.service }}
             org.opencontainers.image.version=${{ needs.release.outputs.calver }}
+            org.opencontainers.image.variant=${{ matrix.variant }}
             org.opencontainers.image.description=Self-hosted ${{ matrix.service }} service image
 
       - name: Build and push image
@@ -112,11 +132,14 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Changing this value invalidates the Photon import layer on each
-          # scheduled release, even though its source URL is named `latest`.
-          build-args: ${{ matrix.service == 'photon' && format('PHOTON_DATA_VERSION={0}', needs.release.outputs.calver) || '' }}
-          cache-from: type=gha,scope=roadway-${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=roadway-${{ matrix.service }}
+          # Changing the data-version value invalidates the remote latest-data
+          # import layer on each scheduled release.
+          build-args: |
+            ${{ matrix.service == 'osrm' && format('OSRM_PROFILE={0}', matrix.variant) || '' }}
+            ${{ matrix.service == 'osrm' && format('OSRM_DATA_VERSION={0}', needs.release.outputs.calver) || '' }}
+            ${{ matrix.service == 'photon' && format('PHOTON_DATA_VERSION={0}', needs.release.outputs.calver) || '' }}
+          cache-from: type=gha,scope=roadway-${{ matrix.service }}-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=roadway-${{ matrix.service }}-${{ matrix.variant }}
 
       - name: Verify published image
         env:

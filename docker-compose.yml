@@ -1,9 +1,40 @@
 services:
   osrm:
-    image: ghcr.io/chof64/roadway-osrm:local
+    image: ghcr.io/chof64/roadway-osrm:${ROUTING_VARIANT:-restrictive}
     build:
       context: ./osrm
       dockerfile: Dockerfile
+      args:
+        OSRM_PROFILE: ${ROUTING_VARIANT:-restrictive}
+        OSRM_DATA_VERSION: ${ROUTING_DATA_VERSION:-local}
+    expose:
+      - "5000"
+    restart: unless-stopped
+
+  # Optional dual-profile deployment for an application facade such as Xicar.
+  # Start with: docker compose --profile dual-routing up --build
+  osrm-restrictive:
+    profiles: [dual-routing]
+    image: ghcr.io/chof64/roadway-osrm:restrictive
+    build:
+      context: ./osrm
+      dockerfile: Dockerfile
+      args:
+        OSRM_PROFILE: restrictive
+        OSRM_DATA_VERSION: ${ROUTING_DATA_VERSION:-local}
+    expose:
+      - "5000"
+    restart: unless-stopped
+
+  osrm-permissive:
+    profiles: [dual-routing]
+    image: ghcr.io/chof64/roadway-osrm:permissive
+    build:
+      context: ./osrm
+      dockerfile: Dockerfile
+      args:
+        OSRM_PROFILE: permissive
+        OSRM_DATA_VERSION: ${ROUTING_DATA_VERSION:-local}
     expose:
       - "5000"
     restart: unless-stopped
