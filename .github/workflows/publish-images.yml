@@ -19,6 +19,9 @@ permissions:
   contents: read
   packages: write
 
+env:
+  OSRM_PBF_URL: https://download.geofabrik.de/asia/philippines-latest.osm.pbf
+
 jobs:
   release:
     name: Resolve CalVer
@@ -57,9 +60,32 @@ jobs:
       - name: Run OSRM profile smoke test
         run: bash osrm/tests/smoke.sh
 
+  osrm-data:
+    name: Download OSRM data
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Philippines extract
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p osrm
+          curl -fL --retry 5 --retry-delay 3 \
+            "${OSRM_PBF_URL}" \
+            -o osrm/philippines.osm.pbf
+
+      - name: Upload OSRM data artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: roadway-osrm-data-${{ needs.release.outputs.calver }}
+          path: osrm/philippines.osm.pbf
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
   build:
     name: Build ${{ matrix.service }}${{ matrix.variant != 'default' && format(' ({0})', matrix.variant) || '' }}
-    needs: [release, smoke]
+    needs: [release, smoke, osrm-data]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -91,6 +117,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download prepared OSRM data
+        if: matrix.service == 'osrm'
+        uses: actions/download-artifact@v4
+        with:
+          name: roadway-osrm-data-${{ needs.release.outputs.calver }}
+          path: ./osrm
 
       - name: Resolve image name
         id: image
@@ -133,6 +166,7 @@ jobs:
           build-args: |
             ${{ matrix.service == 'osrm' && format('OSRM_PROFILE={0}', matrix.variant) || '' }}
             ${{ matrix.service == 'osrm' && format('OSRM_DATA_VERSION={0}', needs.release.outputs.calver) || '' }}
+            ${{ matrix.service == 'osrm' && format('PBF_FILE={0}', 'philippines.osm.pbf') || '' }}
             ${{ matrix.service == 'photon' && format('PHOTON_DATA_VERSION={0}', needs.release.outputs.calver) || '' }}
           cache-from: type=gha,scope=roadway-${{ matrix.service }}-${{ matrix.variant }}
           cache-to: type=gha,mode=max,scope=roadway-${{ matrix.service }}-${{ matrix.variant }}
