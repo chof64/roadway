@@ -3,7 +3,7 @@
 Self-hosted routing, directions, and reverse-geocoding images for applications
 that need a private geographic data stack.
 
-The repository deliberately keeps the services as two independently deployable
+The repository deliberately keeps the services as independently deployable
 containers:
 
 - `ghcr.io/chof64/roadway-osrm:restrictive` — default OSRM routing for the
@@ -13,11 +13,14 @@ containers:
   an already-authorized vehicle that needs to reach selected restricted roads.
 - `ghcr.io/chof64/roadway-photon` — Photon reverse geocoding, built from the
   Philippines Photon dump.
+- `ghcr.io/chof64/roadway-ors-compat` — temporary ORS-compatible facade for the
+  roadway OSRM image.
 
 The application should call these through an internal adapter or facade:
 
 ```text
-Routing application -> /route, /table -> roadway-osrm:5000
+Routing application -> /ors/v2/directions/{profile} -> roadway-ors-compat:8080
+roadway-ors-compat -> /route -> roadway-osrm:5000
 Routing application -> /reverse       -> roadway-photon:2322
 ```
 
@@ -31,8 +34,48 @@ When running through Compose, the service names are `osrm` and `photon`:
 
 ```text
 OSRM base URL:   http://osrm:5000
+ORS compatibility URL: http://ors-compat:8080
 Photon base URL: http://photon:2322
 ```
+
+### Temporary ORS compatibility sidecar
+
+`ors-compat` preserves the ORS-shaped routing contract while the application
+migrates away from the existing ORS engine. It accepts the driving-car and
+cycling-electric profiles used by Xicar, mapping both to the one configured
+driving OSRM instance. It supports POST directions requests from the backend:
+
+```text
+POST http://ors-compat:8080/ors/v2/directions/driving-car
+POST http://ors-compat:8080/ors/v2/directions/cycling-electric
+Content-Type: application/json
+
+{"coordinates":[[<longitude>,<latitude>],[<longitude>,<latitude>]],"instructions":false}
+```
+
+The legacy GET form remains available for simple start/end requests:
+
+```text
+GET http://ors-compat:8080/ors/v2/directions/driving-car
+    ?start=<longitude>,<latitude>
+    &end=<longitude>,<latitude>
+    &geometry_format=geojson
+    &instructions=false
+```
+
+The sidecar has no routing-flavor selector. `OSRM_UPSTREAM_URL` is the only
+upstream setting, so one selected OSRM instance can be placed behind it at a
+time. The adapter preserves the ORS GeoJSON response shape for route geometry,
+summary, segments, and waypoints. It also includes a legacy `routes[0]` view
+with an encoded polyline for the ride-share path in the current backend. Matrix
+and snap requests are translated to OSRM table and nearest requests as well.
+Route values can still differ from the old service when the underlying graph or
+routing engine differs. Both incoming profiles intentionally use the driving
+OSRM graph during this migration.
+
+The sidecar is a migration aid, not a permanent public API. Once clients use a
+native internal facade or OSRM directly, remove the `ors-compat` service and
+the old ORS-shaped route contract together.
 
 These names resolve only inside the Docker network. To access the containers
 from the host, publish ports explicitly, for example:
@@ -41,6 +84,9 @@ from the host, publish ports explicitly, for example:
 docker run --rm -p 5001:5000 ghcr.io/chof64/roadway-osrm:restrictive
 docker run --rm -p 5002:5000 ghcr.io/chof64/roadway-osrm:permissive
 docker run --rm -p 23222:2322 ghcr.io/chof64/roadway-photon:local
+docker run --rm -p 8080:8080 \
+  -e OSRM_UPSTREAM_URL=http://host.docker.internal:5001 \
+  ghcr.io/chof64/roadway-ors-compat:local
 ```
 
 The corresponding host URLs are then `http://127.0.0.1:5001`,
@@ -126,6 +172,7 @@ docker build \
   -t ghcr.io/chof64/roadway-osrm:permissive \
   osrm
 docker build -f photon/Dockerfile -t ghcr.io/chof64/roadway-photon:local photon
+docker build -f compat/Dockerfile -t ghcr.io/chof64/roadway-ors-compat:local compat
 ```
 
 The OSRM build downloads the current Philippines PBF, extracts a car profile,
@@ -169,8 +216,9 @@ the unqualified CalVer remain aliases for the restrictive variant only.
 ## GitHub Actions publishing
 
 The `Build and publish roadway images` workflow runs every Monday at 02:17 UTC
-and can also be started manually. Each run publishes the OSRM variants with a
-UTC CalVer tag in the form `YYYY.MM.DD`:
+and can also be started manually. Each run builds and publishes the OSRM
+variants, Photon, and ORS compatibility images to GHCR. OSRM variants use a
+UTC CalVer tag in the form `YYYY.MM.DD` plus variant-specific tags:
 
 ```text
 ghcr.io/<owner>/roadway-osrm:2026.09.01
@@ -181,6 +229,8 @@ ghcr.io/<owner>/roadway-osrm:permissive
 ghcr.io/<owner>/roadway-osrm:latest
 ghcr.io/<owner>/roadway-photon:2026.09.01
 ghcr.io/<owner>/roadway-photon:latest
+ghcr.io/<owner>/roadway-ors-compat:2026.09.01
+ghcr.io/<owner>/roadway-ors-compat:latest
 ```
 
 The workflow uses the GitHub-provided token, so the repository must have

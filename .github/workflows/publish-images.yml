@@ -169,10 +169,23 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: docker buildx imagetools inspect "${IMAGE}@${DIGEST}"
 
-  build-photon:
-    name: Build photon
+  build-services:
+    name: Build ${{ matrix.service }}
     needs: [release, smoke]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: photon
+            variant: default
+            context: ./photon
+            dockerfile: ./photon/Dockerfile
+          - service: ors-compat
+            variant: default
+            context: ./compat
+            dockerfile: ./compat/Dockerfile
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -191,7 +204,7 @@ jobs:
         id: image
         env:
           OWNER: ${{ github.repository_owner }}
-          SERVICE: photon
+          SERVICE: ${{ matrix.service }}
         shell: bash
         run: |
           set -euo pipefail
@@ -204,26 +217,29 @@ jobs:
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
-            type=raw,value=${{ needs.release.outputs.calver }}
-            type=raw,value=latest
+            type=raw,value=${{ needs.release.outputs.calver }},enable=${{ matrix.service != 'osrm' || matrix.variant == 'restrictive' }}
+            type=raw,value=latest,enable=${{ matrix.service != 'osrm' || matrix.variant == 'restrictive' }}
+            type=raw,value=${{ needs.release.outputs.calver }}-${{ matrix.variant }},enable=${{ matrix.service == 'osrm' }}
+            type=raw,value=${{ matrix.variant }},enable=${{ matrix.service == 'osrm' }}
           labels: |
-            org.opencontainers.image.title=roadway-photon
+            org.opencontainers.image.title=roadway-${{ matrix.service }}
             org.opencontainers.image.version=${{ needs.release.outputs.calver }}
-            org.opencontainers.image.variant=default
-            org.opencontainers.image.description=Self-hosted photon service image
+            org.opencontainers.image.variant=${{ matrix.variant }}
+            org.opencontainers.image.description=Self-hosted ${{ matrix.service }} service image
 
       - name: Build and push image
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: ./photon
-          file: ./photon/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: PHOTON_DATA_VERSION=${{ needs.release.outputs.calver }}
-          cache-from: type=gha,scope=roadway-photon-default
-          cache-to: type=gha,mode=max,scope=roadway-photon-default
+          build-args: |
+            ${{ matrix.service == 'photon' && format('PHOTON_DATA_VERSION={0}', needs.release.outputs.calver) || '' }}
+          cache-from: type=gha,scope=roadway-${{ matrix.service }}-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=roadway-${{ matrix.service }}-${{ matrix.variant }}
 
       - name: Verify published image
         env:

@@ -5,6 +5,12 @@ services:
     cpus: ${BENCH_CPUS:-1}
     mem_limit: ${BENCH_MEMORY:-1g}
 
+  ors-compat:
+    ports:
+      - "127.0.0.1:${BENCH_ORS_COMPAT_PORT:-8080}:8080"
+    cpus: ${BENCH_COMPAT_CPUS:-${BENCH_CPUS:-1}}
+    mem_limit: ${BENCH_COMPAT_MEMORY:-${BENCH_MEMORY:-1g}}
+
   photon:
     ports:
       - "127.0.0.1:${BENCH_PHOTON_PORT:-23222}:2322"
