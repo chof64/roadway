@@ -3,13 +3,15 @@
 Self-hosted routing, directions, and reverse-geocoding images for applications
 that need a private geographic data stack.
 
-The repository deliberately keeps the services as two independently deployable
+The repository deliberately keeps the services as independently deployable
 containers:
 
 - `ghcr.io/chof64/roadway-osrm` — OSRM routing for the Philippines, built from
   a Geofabrik OSM extract.
 - `ghcr.io/chof64/roadway-photon` — Photon reverse geocoding, built from the
   Philippines Photon dump.
+- `ghcr.io/chof64/roadway-ors-compat` — temporary ORS-compatible facade for the
+  roadway OSRM image.
 
 The application should call these through an internal adapter or facade:
 
@@ -74,6 +76,9 @@ from the host, publish ports explicitly, for example:
 ```sh
 docker run --rm -p 5001:5000 ghcr.io/chof64/roadway-osrm:local
 docker run --rm -p 23222:2322 ghcr.io/chof64/roadway-photon:local
+docker run --rm -p 8080:8080 \
+  -e OSRM_UPSTREAM_URL=http://host.docker.internal:5001 \
+  ghcr.io/chof64/roadway-ors-compat:local
 ```
 
 The corresponding host URLs are then `http://127.0.0.1:5001` and
@@ -147,6 +152,7 @@ Build the images from the repository root:
 ```sh
 docker build -f osrm/Dockerfile -t ghcr.io/chof64/roadway-osrm:local osrm
 docker build -f photon/Dockerfile -t ghcr.io/chof64/roadway-photon:local photon
+docker build -f compat/Dockerfile -t ghcr.io/chof64/roadway-ors-compat:local compat
 ```
 
 The OSRM build downloads the current Philippines PBF, extracts a car profile,
@@ -179,14 +185,17 @@ CalVer or deliberately follow the most recent weekly build.
 ## GitHub Actions publishing
 
 The `Build and publish roadway images` workflow runs every Monday at 02:17 UTC
-and can also be started manually. Each run builds and publishes both images to
-GHCR using a UTC CalVer tag in the form `YYYY.MM.DD`, plus `latest`:
+and can also be started manually. Each run builds and publishes the OSRM,
+Photon, and ORS compatibility images to GHCR using a UTC CalVer tag in the form
+`YYYY.MM.DD`, plus `latest`:
 
 ```text
 ghcr.io/<owner>/roadway-osrm:2026.09.01
 ghcr.io/<owner>/roadway-osrm:latest
 ghcr.io/<owner>/roadway-photon:2026.09.01
 ghcr.io/<owner>/roadway-photon:latest
+ghcr.io/<owner>/roadway-ors-compat:2026.09.01
+ghcr.io/<owner>/roadway-ors-compat:latest
 ```
 
 The workflow uses the GitHub-provided token, so the repository must have
