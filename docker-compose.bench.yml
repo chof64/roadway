@@ -1,0 +1,14 @@
+services:
+  osrm:
+    ports:
+      - "127.0.0.1:${BENCH_OSRM_PORT:-5001}:5000"
+    cpus: ${BENCH_CPUS:-1}
+    mem_limit: ${BENCH_MEMORY:-1g}
+
+  photon:
+    ports:
+      - "127.0.0.1:${BENCH_PHOTON_PORT:-23222}:2322"
+    cpus: ${BENCH_CPUS:-1}
+    mem_limit: ${BENCH_MEMORY:-1g}
+    environment:
+      JAVA_OPTS: ${BENCH_PHOTON_JAVA_OPTS:--XX:MaxRAMPercentage=60}

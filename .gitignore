@@ -4,6 +4,9 @@
 photon/data/
 osrm/data/
 
+# Benchmark output
+bench/results/
+
 # Local environment files
 .env
 .env.*

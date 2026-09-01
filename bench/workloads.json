@@ -1,0 +1,40 @@
+{
+  "osrm-route-2": {
+    "service": "osrm",
+    "paths": [
+      "/route/v1/driving/121.056,14.676;121.058,14.678?overview=full&geometries=polyline6&steps=false",
+      "/route/v1/driving/121.043,14.604;121.050,14.610?overview=full&geometries=polyline6&steps=false",
+      "/route/v1/driving/123.885,10.315;123.895,10.320?overview=full&geometries=polyline6&steps=false",
+      "/route/v1/driving/125.600,7.070;125.610,7.075?overview=full&geometries=polyline6&steps=false",
+      "/route/v1/driving/120.596,16.402;120.600,16.405?overview=full&geometries=polyline6&steps=false"
+    ]
+  },
+  "osrm-route-5": {
+    "service": "osrm",
+    "paths": [
+      "/route/v1/driving/121.056,14.676;121.058,14.678;121.060,14.680;121.063,14.682;121.066,14.685?overview=full&geometries=polyline6&steps=false",
+      "/route/v1/driving/121.043,14.604;121.046,14.607;121.050,14.610;121.054,14.613;121.058,14.616?overview=full&geometries=polyline6&steps=false",
+      "/route/v1/driving/123.885,10.315;123.888,10.317;123.892,10.319;123.895,10.320;123.899,10.323?overview=full&geometries=polyline6&steps=false"
+    ]
+  },
+  "osrm-table-5": {
+    "service": "osrm",
+    "paths": [
+      "/table/v1/driving/121.056,14.676;121.058,14.678;121.060,14.680;121.063,14.682;121.066,14.685?annotations=distance,duration",
+      "/table/v1/driving/121.043,14.604;121.046,14.607;121.050,14.610;121.054,14.613;121.058,14.616?annotations=distance,duration"
+    ]
+  },
+  "photon-reverse": {
+    "service": "photon",
+    "paths": [
+      "/reverse?lon=121.056&lat=14.676&limit=1",
+      "/reverse?lon=121.043&lat=14.604&limit=1",
+      "/reverse?lon=123.885&lat=10.315&limit=1",
+      "/reverse?lon=125.600&lat=7.070&limit=1",
+      "/reverse?lon=120.596&lat=16.402&limit=1",
+      "/reverse?lon=121.621&lat=16.413&limit=1",
+      "/reverse?lon=122.562&lat=10.720&limit=1",
+      "/reverse?lon=124.245&lat=8.481&limit=1"
+    ]
+  }
+}
