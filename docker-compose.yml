@@ -8,6 +8,20 @@ services:
       - "5000"
     restart: unless-stopped
 
+  ors-compat:
+    image: ghcr.io/chof64/roadway-ors-compat:local
+    build:
+      context: ./compat
+      dockerfile: Dockerfile
+    environment:
+      LISTEN_ADDR: ":8080"
+      OSRM_UPSTREAM_URL: http://osrm:5000
+    expose:
+      - "8080"
+    depends_on:
+      - osrm
+    restart: unless-stopped
+
   photon:
     image: ghcr.io/chof64/roadway-photon:local
     build:

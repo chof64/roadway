@@ -14,7 +14,8 @@ containers:
 The application should call these through an internal adapter or facade:
 
 ```text
-Routing application -> /route, /table -> roadway-osrm:5000
+Routing application -> /ors/v2/directions/driving-car -> roadway-ors-compat:8080
+roadway-ors-compat -> /route -> roadway-osrm:5000
 Routing application -> /reverse       -> roadway-photon:2322
 ```
 
@@ -24,8 +25,35 @@ When running through Compose, the service names are `osrm` and `photon`:
 
 ```text
 OSRM base URL:   http://osrm:5000
+ORS compatibility URL: http://ors-compat:8080
 Photon base URL: http://photon:2322
 ```
+
+### Temporary ORS compatibility sidecar
+
+`ors-compat` preserves the restricted directions contract while the application
+migrates away from the existing ORS-shaped response. It accepts the restricted
+GET form below and translates it to a native OSRM route request:
+
+```text
+GET http://ors-compat:8080/ors/v2/directions/driving-car
+    ?start=<longitude>,<latitude>
+    &end=<longitude>,<latitude>
+    &geometry_format=geojson
+    &instructions=false
+```
+
+The sidecar has no routing-flavor selector. `OSRM_UPSTREAM_URL` is the only
+upstream setting, so one selected OSRM instance can be placed behind it at a
+time. The adapter preserves the ORS GeoJSON response shape for route geometry,
+summary, segments, and waypoints; route values can still differ from the old
+service when the underlying graph or routing engine differs. Unsupported query
+parameters and geometry formats return a clear client error rather than being
+silently ignored.
+
+The sidecar is a migration aid, not a permanent public API. Once clients use a
+native internal facade or OSRM directly, remove the `ors-compat` service and
+the old ORS-shaped route contract together.
 
 These names resolve only inside the Docker network. To access the containers
 from the host, publish ports explicitly, for example:

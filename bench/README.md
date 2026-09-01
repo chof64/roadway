@@ -10,7 +10,7 @@ This benchmark measures the two runtime services at three per-container resource
 | `2x` | `2` | `2g` |
 | `4x` | `4` | `4g` |
 
-The limits apply to each service container. In the combined test, a `1x` run therefore allows 1 vCPU and 1 GB to OSRM and the same to Photon.
+The limits apply to each service container. In the combined test, a `1x` run therefore allows 1 vCPU and 1 GB to OSRM, the compatibility sidecar, and Photon.
 
 Photon uses `-XX:MaxRAMPercentage=60` in the benchmark Compose override so its JVM heap leaves space for native memory and the Lucene index. This is a benchmark runtime setting; production tuning should be decided separately.
 
@@ -113,3 +113,5 @@ The useful output is the throughput/latency curve for each scenario, not a singl
 - `photon-reverse`: reverse geocoding with `limit=1`.
 
 The coordinate corpus is deliberately fixed and seeded for repeatability. It is a representative sample, not a statistically complete map of production traffic.
+
+To benchmark the migration path, send route requests to `http://127.0.0.1:8080` and include the `ors-compat` container ID in resource sampling. Direct OSRM benchmarks remain useful for measuring the routing engine without adapter overhead.
