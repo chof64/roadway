@@ -37,6 +37,8 @@ RUN case "${OSRM_PROFILE}" in \
       restrictive|permissive) ;; \
       *) echo "Unsupported OSRM_PROFILE: ${OSRM_PROFILE}" >&2; exit 2 ;; \
     esac \
+  && mkdir -p /profiles/lib \
+  && cp -a /opt/lib/. /profiles/lib/ \
   && osrm-extract \
       --profile "/profiles/${OSRM_PROFILE}.lua" \
       --threads "${OSRM_BUILD_THREADS}" \

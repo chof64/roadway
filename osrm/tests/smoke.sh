@@ -23,8 +23,11 @@ for profile in restrictive permissive; do
     --entrypoint sh \
     "${image}" \
     -ec "
+      mkdir -p /profiles/lib
+      cp -a /opt/lib/. /profiles/lib/
+      cp /workspace/osrm/profiles/${profile}.lua /profiles/${profile}.lua
       osrm-extract \
-        --profile /workspace/osrm/profiles/${profile}.lua \
+        --profile /profiles/${profile}.lua \
         --output /data/philippines.osrm \
         /workspace/osrm/tests/fixtures/access.osm
       osrm-contract /data/philippines.osrm
