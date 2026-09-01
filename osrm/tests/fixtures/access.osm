@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="roadway-tests">
+  <node id="1" lat="14.000000" lon="121.000000" />
+  <node id="2" lat="14.000000" lon="121.001000" />
+  <node id="3" lat="14.001000" lon="121.002000" />
+  <node id="4" lat="14.000000" lon="121.003000" />
+  <node id="5" lat="14.000000" lon="121.002000" barrier="gate" access="private" />
+  <node id="10" lat="14.010000" lon="121.010000" />
+  <node id="11" lat="14.010000" lon="121.011000" />
+  <node id="12" lat="14.010000" lon="121.009000" />
+  <node id="13" lat="14.010000" lon="121.012000" />
+
+  <way id="100">
+    <nd ref="1" />
+    <nd ref="2" />
+    <nd ref="3" />
+    <nd ref="4" />
+    <tag k="highway" v="residential" />
+    <tag k="access" v="yes" />
+  </way>
+  <way id="101">
+    <nd ref="2" />
+    <nd ref="5" />
+    <nd ref="4" />
+    <tag k="highway" v="residential" />
+    <tag k="access" v="private" />
+  </way>
+  <way id="102">
+    <nd ref="10" />
+    <nd ref="11" />
+    <tag k="highway" v="residential" />
+    <tag k="access" v="no" />
+  </way>
+  <way id="103">
+    <nd ref="12" />
+    <nd ref="10" />
+    <tag k="highway" v="residential" />
+    <tag k="access" v="yes" />
+  </way>
+  <way id="104">
+    <nd ref="11" />
+    <nd ref="13" />
+    <tag k="highway" v="residential" />
+    <tag k="access" v="yes" />
+  </way>
+</osm>

@@ -6,8 +6,11 @@ that need a private geographic data stack.
 The repository deliberately keeps the services as two independently deployable
 containers:
 
-- `ghcr.io/chof64/roadway-osrm` — OSRM routing for the Philippines, built from
-  a Geofabrik OSM extract.
+- `ghcr.io/chof64/roadway-osrm:restrictive` — default OSRM routing for the
+  Philippines, built from a Geofabrik OSM extract while honoring access
+  restrictions.
+- `ghcr.io/chof64/roadway-osrm:permissive` — opt-in OSRM routing variant for
+  an already-authorized vehicle that needs to reach selected restricted roads.
 - `ghcr.io/chof64/roadway-photon` — Photon reverse geocoding, built from the
   Philippines Photon dump.
 
@@ -17,6 +20,10 @@ The application should call these through an internal adapter or facade:
 Routing application -> /route, /table -> roadway-osrm:5000
 Routing application -> /reverse       -> roadway-photon:2322
 ```
+
+The `restrictive` OSRM image is the safe default. The `permissive` image must
+only be selected by an application policy that has already established access
+for the ride; the image does not grant permission by itself.
 
 ## Service endpoints
 
@@ -31,12 +38,13 @@ These names resolve only inside the Docker network. To access the containers
 from the host, publish ports explicitly, for example:
 
 ```sh
-docker run --rm -p 5001:5000 ghcr.io/chof64/roadway-osrm:local
+docker run --rm -p 5001:5000 ghcr.io/chof64/roadway-osrm:restrictive
+docker run --rm -p 5002:5000 ghcr.io/chof64/roadway-osrm:permissive
 docker run --rm -p 23222:2322 ghcr.io/chof64/roadway-photon:local
 ```
 
-The corresponding host URLs are then `http://127.0.0.1:5001` and
-`http://127.0.0.1:23222`.
+The corresponding host URLs are then `http://127.0.0.1:5001`,
+`http://127.0.0.1:5002`, and `http://127.0.0.1:23222`.
 
 ### OSRM routing and directions
 
@@ -104,7 +112,19 @@ unavailable in the default reverse-only image.
 Build the images from the repository root:
 
 ```sh
-docker build -f osrm/Dockerfile -t ghcr.io/chof64/roadway-osrm:local osrm
+docker build \
+  --build-arg OSRM_PROFILE=restrictive \
+  --build-arg OSRM_DATA_VERSION=local \
+  -f osrm/Dockerfile \
+  -t ghcr.io/chof64/roadway-osrm:restrictive \
+  osrm
+
+docker build \
+  --build-arg OSRM_PROFILE=permissive \
+  --build-arg OSRM_DATA_VERSION=local \
+  -f osrm/Dockerfile \
+  -t ghcr.io/chof64/roadway-osrm:permissive \
+  osrm
 docker build -f photon/Dockerfile -t ghcr.io/chof64/roadway-photon:local photon
 ```
 
@@ -119,8 +139,19 @@ For a checksum-pinned build, pass a data version and checksum explicitly:
 docker build \
   --build-arg PBF_URL=https://download.geofabrik.de/asia/philippines-latest.osm.pbf \
   --build-arg PBF_SHA256=<sha256> \
+  --build-arg OSRM_PROFILE=restrictive \
+  --build-arg OSRM_DATA_VERSION=<data-version> \
   -f osrm/Dockerfile \
-  -t ghcr.io/chof64/roadway-osrm:<data-version> \
+  -t ghcr.io/chof64/roadway-osrm:<data-version>-restrictive \
+  osrm
+
+docker build \
+  --build-arg PBF_URL=https://download.geofabrik.de/asia/philippines-latest.osm.pbf \
+  --build-arg PBF_SHA256=<sha256> \
+  --build-arg OSRM_PROFILE=permissive \
+  --build-arg OSRM_DATA_VERSION=<data-version> \
+  -f osrm/Dockerfile \
+  -t ghcr.io/chof64/roadway-osrm:<data-version>-permissive \
   osrm
 
 docker build \
@@ -131,18 +162,22 @@ docker build \
   photon
 ```
 
-The date tag is the reproducible deployment pin. The automated workflow also
-publishes `latest` as a convenience pointer, so deployments can either pin a
-CalVer or deliberately follow the most recent weekly build.
+The date-plus-variant tag is the reproducible deployment pin. The automated
+workflow publishes moving `restrictive` and `permissive` aliases. `latest` and
+the unqualified CalVer remain aliases for the restrictive variant only.
 
 ## GitHub Actions publishing
 
 The `Build and publish roadway images` workflow runs every Monday at 02:17 UTC
-and can also be started manually. Each run builds and publishes both images to
-GHCR using a UTC CalVer tag in the form `YYYY.MM.DD`, plus `latest`:
+and can also be started manually. Each run publishes the OSRM variants with a
+UTC CalVer tag in the form `YYYY.MM.DD`:
 
 ```text
 ghcr.io/<owner>/roadway-osrm:2026.09.01
+ghcr.io/<owner>/roadway-osrm:2026.09.01-restrictive
+ghcr.io/<owner>/roadway-osrm:2026.09.01-permissive
+ghcr.io/<owner>/roadway-osrm:restrictive
+ghcr.io/<owner>/roadway-osrm:permissive
 ghcr.io/<owner>/roadway-osrm:latest
 ghcr.io/<owner>/roadway-photon:2026.09.01
 ghcr.io/<owner>/roadway-photon:latest
@@ -151,16 +186,34 @@ ghcr.io/<owner>/roadway-photon:latest
 The workflow uses the GitHub-provided token, so the repository must have
 Actions permission to write packages. A manual run may provide a CalVer
 override when a date tag needs to be rebuilt. The Photon CalVer is passed as
-`PHOTON_DATA_VERSION` so the scheduled run does not reuse the import layer for
-the remote `latest` dump. The OSRM and Photon jobs use separate Buildx caches.
+`PHOTON_DATA_VERSION`, and the OSRM CalVer is passed as `OSRM_DATA_VERSION`, so
+scheduled runs do not reuse import layers for remote `latest` data. Each OSRM
+variant has a separate Buildx cache.
 
 ## Runtime notes
 
-OSRM is configured for static CH routing with memory-mapped graph files. It
-keeps route geometry for polylines and disables route steps. Photon is limited
-to one reverse result and a two-second query timeout; CORS is not enabled by
-default because the services should normally be private to the application
-network.
+OSRM is configured for static CH routing with memory-mapped graph files. Route
+steps remain enabled so Xicar can inspect access classes in the permissive
+variant. Photon is limited to one reverse result and a two-second query
+timeout; CORS is not enabled by default because the services should normally
+be private to the application network.
+
+For local fallback testing, start both OSRM variants:
+
+```sh
+docker compose --profile dual-routing up --build
+```
+
+To run only one selected flavor through the default `osrm` service:
+
+```sh
+ROUTING_VARIANT=permissive docker compose up --build osrm
+```
+
+The services are then available inside the Compose network as
+`osrm-restrictive:5000` and `osrm-permissive:5000`. Xicar should call the
+restrictive service for normal routes and call the permissive service only
+after its ride/access policy explicitly authorizes entry.
 
 Builds need substantially more temporary CPU and memory than the running
 services. Run the scheduled build on a builder/CI worker, publish the images,
