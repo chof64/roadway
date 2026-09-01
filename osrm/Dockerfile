@@ -11,12 +11,19 @@ FROM alpine:3.22 AS downloader
 
 ARG PBF_URL=https://download.geofabrik.de/asia/philippines-latest.osm.pbf
 ARG PBF_SHA256=
+ARG PBF_FILE=philippines.osm.pbf
 ARG OSRM_DATA_VERSION=latest
+
+COPY . /build-context/
 
 RUN apk add --no-cache ca-certificates curl \
   && mkdir -p /input \
   && echo "Building OSRM data version: ${OSRM_DATA_VERSION}" \
-  && curl -fL --retry 5 --retry-delay 3 "${PBF_URL}" -o /input/philippines.osm.pbf \
+  && if [ -f "/build-context/${PBF_FILE}" ]; then \
+       cp "/build-context/${PBF_FILE}" /input/philippines.osm.pbf; \
+     else \
+       curl -fL --retry 5 --retry-delay 3 "${PBF_URL}" -o /input/philippines.osm.pbf; \
+     fi \
   && if [ -n "${PBF_SHA256}" ]; then \
        echo "${PBF_SHA256}  /input/philippines.osm.pbf" | sha256sum -c -; \
      fi
@@ -37,6 +44,8 @@ RUN case "${OSRM_PROFILE}" in \
       restrictive|permissive) ;; \
       *) echo "Unsupported OSRM_PROFILE: ${OSRM_PROFILE}" >&2; exit 2 ;; \
     esac \
+  && mkdir -p /profiles/lib \
+  && cp -a /opt/lib/. /profiles/lib/ \
   && osrm-extract \
       --profile "/profiles/${OSRM_PROFILE}.lua" \
       --threads "${OSRM_BUILD_THREADS}" \
