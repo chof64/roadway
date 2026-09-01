@@ -73,6 +73,10 @@ jobs:
             variant: default
             context: ./photon
             dockerfile: ./photon/Dockerfile
+          - service: ors-compat
+            variant: default
+            context: ./compat
+            dockerfile: ./compat/Dockerfile
           - service: osrm
             variant: permissive
             context: ./osrm
@@ -109,8 +113,8 @@ jobs:
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
-            type=raw,value=${{ needs.release.outputs.calver }},enable=${{ matrix.service == 'photon' || matrix.variant == 'restrictive' }}
-            type=raw,value=latest,enable=${{ matrix.service == 'photon' || matrix.variant == 'restrictive' }}
+            type=raw,value=${{ needs.release.outputs.calver }},enable=${{ matrix.service != 'osrm' || matrix.variant == 'restrictive' }}
+            type=raw,value=latest,enable=${{ matrix.service != 'osrm' || matrix.variant == 'restrictive' }}
             type=raw,value=${{ needs.release.outputs.calver }}-${{ matrix.variant }},enable=${{ matrix.service == 'osrm' }}
             type=raw,value=${{ matrix.variant }},enable=${{ matrix.service == 'osrm' }}
           labels: |
