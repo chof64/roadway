@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -28,6 +29,14 @@ func main() {
 		upstream: upstream,
 		client:   &http.Client{Timeout: 15 * time.Second},
 	}
+	corsEnabled, err := strconv.ParseBool(getenv("CORS_ENABLED", "false"))
+	if err != nil {
+		log.Fatalf("invalid CORS_ENABLED: %v", err)
+	}
+	cors, err := newCORSConfig(corsEnabled, os.Getenv("CORS_ALLOWED_ORIGINS"), getenv("CORS_ALLOWED_HEADERS", defaultCORSAllowedHeaders))
+	if err != nil {
+		log.Fatalf("invalid CORS configuration: %v", err)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler)
 	mux.HandleFunc("/readyz", app.readyHandler)
@@ -39,7 +48,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              getenv("LISTEN_ADDR", ":80"),
-		Handler:           mux,
+		Handler:           cors.handler(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
