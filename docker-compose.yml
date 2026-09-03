@@ -8,7 +8,7 @@ services:
         OSRM_PROFILE: ${ROUTING_VARIANT:-restrictive}
         OSRM_DATA_VERSION: ${ROUTING_DATA_VERSION:-local}
     expose:
-      - "5000"
+      - "80"
     restart: unless-stopped
 
   # Optional dual-profile deployment for an application facade such as Xicar.
@@ -23,7 +23,7 @@ services:
         OSRM_PROFILE: restrictive
         OSRM_DATA_VERSION: ${ROUTING_DATA_VERSION:-local}
     expose:
-      - "5000"
+      - "80"
     restart: unless-stopped
 
   osrm-permissive:
@@ -36,7 +36,7 @@ services:
         OSRM_PROFILE: permissive
         OSRM_DATA_VERSION: ${ROUTING_DATA_VERSION:-local}
     expose:
-      - "5000"
+      - "80"
     restart: unless-stopped
 
   ors-compat:
@@ -45,13 +45,13 @@ services:
       context: ./compat
       dockerfile: Dockerfile
     environment:
-      LISTEN_ADDR: ":8080"
-      OSRM_UPSTREAM_URL: http://osrm:5000
+      LISTEN_ADDR: ":80"
+      OSRM_UPSTREAM_URL: http://osrm:80
       CORS_ENABLED: "${CORS_ENABLED:-false}"
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-}"
       CORS_ALLOWED_HEADERS: "${CORS_ALLOWED_HEADERS:-Content-Type, X-Request-ID}"
     expose:
-      - "8080"
+      - "80"
     depends_on:
       - osrm
     restart: unless-stopped
@@ -62,5 +62,5 @@ services:
       context: ./photon
       dockerfile: Dockerfile
     expose:
-      - "2322"
+      - "80"
     restart: unless-stopped
