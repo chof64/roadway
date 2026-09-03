@@ -19,7 +19,7 @@ type application struct {
 }
 
 func main() {
-	upstream, err := parseUpstreamURL(getenv("OSRM_UPSTREAM_URL", "http://osrm:5000"))
+	upstream, err := parseUpstreamURL(getenv("OSRM_UPSTREAM_URL", "http://osrm:80"))
 	if err != nil {
 		log.Fatalf("invalid OSRM_UPSTREAM_URL: %v", err)
 	}
@@ -38,7 +38,7 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:              getenv("LISTEN_ADDR", ":8080"),
+		Addr:              getenv("LISTEN_ADDR", ":80"),
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

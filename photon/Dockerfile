@@ -47,7 +47,7 @@ ARG PHOTON_VERSION=1.2.1
 
 ENV PHOTON_HOME=/photon \
     PHOTON_DATA_DIR=/photon/data \
-    PHOTON_LISTEN_PORT=2322 \
+    PHOTON_LISTEN_PORT=80 \
     JAVA_OPTS=-Xmx1G
 
 RUN apt-get update \
@@ -64,7 +64,7 @@ RUN chown -R photon:photon "${PHOTON_HOME}"
 WORKDIR /photon
 USER photon
 
-EXPOSE 2322
+EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD curl -fsS "http://127.0.0.1:${PHOTON_LISTEN_PORT}/status" | grep -q '"status":"Ok"'
