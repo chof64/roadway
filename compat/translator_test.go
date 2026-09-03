@@ -28,7 +28,7 @@ func TestParseRouteRequestRejectsUnsupportedParameter(t *testing.T) {
 }
 
 func TestBuildOSRMURL(t *testing.T) {
-	base, err := url.Parse("http://osrm:5000")
+	base, err := url.Parse("http://osrm:80")
 	if err != nil {
 		t.Fatal(err)
 	}

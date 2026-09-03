@@ -19,9 +19,9 @@ containers:
 The application should call these through an internal adapter or facade:
 
 ```text
-Routing application -> /ors/v2/directions/{profile} -> roadway-ors-compat:8080
-roadway-ors-compat -> /route -> roadway-osrm:5000
-Routing application -> /reverse       -> roadway-photon:2322
+Routing application -> /ors/v2/directions/{profile} -> roadway-ors-compat:80
+roadway-ors-compat -> /route -> roadway-osrm:80
+Routing application -> /reverse       -> roadway-photon:80
 ```
 
 The `restrictive` OSRM image is the safe default. The `permissive` image must
@@ -33,9 +33,9 @@ for the ride; the image does not grant permission by itself.
 When running through Compose, the service names are `osrm` and `photon`:
 
 ```text
-OSRM base URL:   http://osrm:5000
-ORS compatibility URL: http://ors-compat:8080
-Photon base URL: http://photon:2322
+OSRM base URL:   http://osrm:80
+ORS compatibility URL: http://ors-compat:80
+Photon base URL: http://photon:80
 ```
 
 ### Temporary ORS compatibility sidecar
@@ -46,8 +46,8 @@ cycling-electric profiles used by Xicar, mapping both to the one configured
 driving OSRM instance. It supports POST directions requests from the backend:
 
 ```text
-POST http://ors-compat:8080/ors/v2/directions/driving-car
-POST http://ors-compat:8080/ors/v2/directions/cycling-electric
+POST http://ors-compat:80/ors/v2/directions/driving-car
+POST http://ors-compat:80/ors/v2/directions/cycling-electric
 Content-Type: application/json
 
 {"coordinates":[[<longitude>,<latitude>],[<longitude>,<latitude>]],"instructions":false}
@@ -56,7 +56,7 @@ Content-Type: application/json
 The legacy GET form remains available for simple start/end requests:
 
 ```text
-GET http://ors-compat:8080/ors/v2/directions/driving-car
+GET http://ors-compat:80/ors/v2/directions/driving-car
     ?start=<longitude>,<latitude>
     &end=<longitude>,<latitude>
     &geometry_format=geojson
@@ -81,10 +81,10 @@ These names resolve only inside the Docker network. To access the containers
 from the host, publish ports explicitly, for example:
 
 ```sh
-docker run --rm -p 5001:5000 ghcr.io/chof64/roadway-osrm:restrictive
-docker run --rm -p 5002:5000 ghcr.io/chof64/roadway-osrm:permissive
-docker run --rm -p 23222:2322 ghcr.io/chof64/roadway-photon:local
-docker run --rm -p 8080:8080 \
+docker run --rm -p 5001:80 ghcr.io/chof64/roadway-osrm:restrictive
+docker run --rm -p 5002:80 ghcr.io/chof64/roadway-osrm:permissive
+docker run --rm -p 23222:80 ghcr.io/chof64/roadway-photon:local
+docker run --rm -p 8080:80 \
   -e OSRM_UPSTREAM_URL=http://host.docker.internal:5001 \
   ghcr.io/chof64/roadway-ors-compat:local
 ```
@@ -104,7 +104,7 @@ route(A;B;C) = A -> B -> C
 Example with route geometry:
 
 ```sh
-curl 'http://osrm:5000/route/v1/driving/121.056,14.676;121.058,14.678;121.060,14.680?overview=full&geometries=polyline6&steps=false'
+curl 'http://osrm:80/route/v1/driving/121.056,14.676;121.058,14.678;121.060,14.680?overview=full&geometries=polyline6&steps=false'
 ```
 
 The response contains one leg for each consecutive pair, plus total `distance`
@@ -114,7 +114,7 @@ in metres, `duration` in seconds, and a `geometry` polyline. Use
 For a distance/duration matrix between multiple points, use `table`:
 
 ```sh
-curl 'http://osrm:5000/table/v1/driving/121.056,14.676;121.058,14.678;121.060,14.680?annotations=distance,duration'
+curl 'http://osrm:80/table/v1/driving/121.056,14.676;121.058,14.678;121.060,14.680?annotations=distance,duration'
 ```
 
 The matrix entries correspond to the input order. `distances[i][j]` is metres
@@ -124,8 +124,8 @@ OSRM also provides `nearest` for snapping a coordinate to the road network and
 `match` for matching a GPS trace to the road network:
 
 ```sh
-curl 'http://osrm:5000/nearest/v1/driving/121.056,14.676?number=1'
-curl 'http://osrm:5000/match/v1/driving/121.056,14.676;121.058,14.678?overview=full&geometries=polyline6'
+curl 'http://osrm:80/nearest/v1/driving/121.056,14.676?number=1'
+curl 'http://osrm:80/match/v1/driving/121.056,14.676;121.058,14.678?overview=full&geometries=polyline6'
 ```
 
 Do not use OSRM’s `trip` service for a user-prescribed stop order. `trip`
@@ -140,14 +140,14 @@ This image is built in reverse-only mode, so the supported application endpoint
 is `/reverse`:
 
 ```sh
-curl 'http://photon:2322/reverse?lon=121.056&lat=14.676&limit=1'
+curl 'http://photon:80/reverse?lon=121.056&lat=14.676&limit=1'
 ```
 
 The response is GeoJSON. `lon` and `lat` are required; `limit` is capped at one
 by the container configuration. The health endpoint is:
 
 ```sh
-curl 'http://photon:2322/status'
+curl 'http://photon:80/status'
 ```
 
 Forward-search endpoints such as `/api` and `/structured` are intentionally
@@ -261,7 +261,7 @@ ROUTING_VARIANT=permissive docker compose up --build osrm
 ```
 
 The services are then available inside the Compose network as
-`osrm-restrictive:5000` and `osrm-permissive:5000`. Xicar should call the
+`osrm-restrictive:80` and `osrm-permissive:80`. Xicar should call the
 restrictive service for normal routes and call the permissive service only
 after its ride/access policy explicitly authorizes entry.
 

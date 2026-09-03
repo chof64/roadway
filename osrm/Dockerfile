@@ -54,10 +54,10 @@ COPY --from=builder /data/philippines.osrm* /data/
 LABEL org.opencontainers.image.variant="${OSRM_PROFILE}" \
       org.opencontainers.image.version="${OSRM_DATA_VERSION}"
 
-EXPOSE 5000
+EXPOSE 80
 
 # mmap keeps the compiled graph file-backed instead of eagerly copying the
 # complete graph into anonymous memory. Route steps remain enabled so clients
 # can inspect access classes emitted by the permissive profile.
 ENTRYPOINT ["osrm-routed"]
-CMD ["/data/philippines.osrm", "--algorithm", "ch", "--mmap"]
+CMD ["/data/philippines.osrm", "--algorithm", "ch", "--mmap", "--port", "80"]
