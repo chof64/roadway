@@ -272,9 +272,11 @@ ghcr.io/<owner>/roadway-ors-compat:latest
 The workflow uses the GitHub-provided token, so the repository must have
 Actions permission to write packages. A manual run may provide a CalVer
 override when a date tag needs to be rebuilt. The Photon CalVer is passed as
-`PHOTON_DATA_VERSION`, and the OSRM CalVer is passed as `OSRM_DATA_VERSION`, so
-scheduled runs do not reuse import layers for remote `latest` data. Each OSRM
-variant has a separate Buildx cache.
+`PHOTON_DATA_VERSION`; the OSRM CalVer names the shared data artifact and is
+passed as `OSRM_DATA_VERSION` to invalidate cached import layers. The workflow
+downloads the OSRM extract once, shares it through a short-lived artifact, and
+reuses it for both OSRM variants. Each OSRM variant has a separate Buildx
+cache.
 
 ## Runtime notes
 

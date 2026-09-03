@@ -23,8 +23,11 @@ for profile in restrictive permissive; do
     --entrypoint sh \
     "${image}" \
     -ec "
+      mkdir -p /profiles/lib
+      cp -a /opt/lib/. /profiles/lib/
+      cp /workspace/osrm/profiles/${profile}.lua /profiles/${profile}.lua
       osrm-extract \
-        --profile /workspace/osrm/profiles/${profile}.lua \
+        --profile /profiles/${profile}.lua \
         --output /data/philippines.osrm \
         /workspace/osrm/tests/fixtures/access.osm
       osrm-contract /data/philippines.osrm
@@ -32,11 +35,11 @@ for profile in restrictive permissive; do
 
   docker run -d --rm \
     --name "${container_name}" \
-    -p 127.0.0.1:5500:5000 \
+    -p 127.0.0.1:5500:80 \
     -v "${work_dir}/${profile}:/data:ro" \
     --entrypoint osrm-routed \
     "${image}" \
-    /data/philippines.osrm --algorithm ch --mmap >/dev/null
+    /data/philippines.osrm --algorithm ch --mmap --port 80 >/dev/null
 
   ready=false
   for attempt in $(seq 1 30); do

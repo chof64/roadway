@@ -17,9 +17,9 @@ RUN addgroup -S compat \
 COPY --from=builder /out/ors-compat /usr/local/bin/ors-compat
 
 USER compat
-EXPOSE 8080
+EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null
+  CMD wget -qO- http://127.0.0.1:80/healthz >/dev/null
 
 ENTRYPOINT ["/usr/local/bin/ors-compat"]
