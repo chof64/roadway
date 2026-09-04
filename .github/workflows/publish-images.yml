@@ -1,6 +1,9 @@
 name: Build and publish roadway images
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     # Weekly refresh after the usual Geofabrik/Photon data update window.
     - cron: '17 2 * * 1'
