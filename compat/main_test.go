@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -84,6 +86,42 @@ func TestORSHealthEndpointReportsOSRMReadiness(t *testing.T) {
 	}
 	if response["status"] != "ready" {
 		t.Fatalf("unexpected health response: %#v", response)
+	}
+}
+
+func TestRequestLoggerLogsRequestDetails(t *testing.T) {
+	var logs bytes.Buffer
+	accessLogger := newAsyncAccessLogger(log.New(&logs, "", 0))
+	t.Cleanup(accessLogger.shutdown)
+
+	handler := requestLoggerWithAccessLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("ok"))
+	}), accessLogger)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ors/v2/health?probe=1", nil)
+	request.RemoteAddr = "192.0.2.1:1234"
+	request.Header.Set("User-Agent", "health-check")
+	request.Header.Set("X-Request-ID", "request-123")
+	handler.ServeHTTP(recorder, request)
+	accessLogger.shutdown()
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	for _, expected := range []string{
+		"request method=GET",
+		`path="/ors/v2/health"`,
+		`query="probe=1"`,
+		"status=201",
+		"bytes=2",
+		`remote="192.0.2.1:1234"`,
+		`user_agent="health-check"`,
+		`request_id="request-123"`,
+	} {
+		if !strings.Contains(logs.String(), expected) {
+			t.Fatalf("log does not contain %q: %s", expected, logs.String())
+		}
 	}
 }
 

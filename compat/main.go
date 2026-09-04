@@ -8,10 +8,16 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 )
 
-const maxUpstreamResponseBytes = 16 << 20
+const (
+	maxUpstreamResponseBytes = 16 << 20
+	requestLogBufferSize     = 256
+)
+
+var defaultAccessLogger = newAsyncAccessLogger(log.New(os.Stdout, "", log.LstdFlags))
 
 type application struct {
 	upstream *url.URL
@@ -53,7 +59,125 @@ func newHandler(app *application) http.Handler {
 		mux.HandleFunc("/ors/v2/matrix/"+profile, app.matrixHandler)
 		mux.HandleFunc("/ors/v2/snap/"+profile, app.snapHandler)
 	}
-	return mux
+	return requestLogger(mux)
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (w *loggingResponseWriter) WriteHeader(status int) {
+	if w.status != 0 {
+		return
+	}
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *loggingResponseWriter) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	written, err := w.ResponseWriter.Write(body)
+	w.bytes += written
+	return written, err
+}
+
+func (w *loggingResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+type requestLogEntry struct {
+	method    string
+	path      string
+	query     string
+	status    int
+	bytes     int
+	duration  int64
+	remote    string
+	userAgent string
+	requestID string
+}
+
+type asyncAccessLogger struct {
+	entries      chan requestLogEntry
+	done         chan struct{}
+	logger       *log.Logger
+	shutdownOnce sync.Once
+}
+
+func newAsyncAccessLogger(logger *log.Logger) *asyncAccessLogger {
+	accessLogger := &asyncAccessLogger{
+		entries: make(chan requestLogEntry, requestLogBufferSize),
+		done:    make(chan struct{}),
+		logger:  logger,
+	}
+	go accessLogger.run()
+	return accessLogger
+}
+
+func (l *asyncAccessLogger) run() {
+	defer close(l.done)
+	for entry := range l.entries {
+		l.logger.Printf(
+			"request method=%s path=%q query=%q status=%d bytes=%d duration_ms=%d remote=%q user_agent=%q request_id=%q",
+			entry.method,
+			entry.path,
+			entry.query,
+			entry.status,
+			entry.bytes,
+			entry.duration,
+			entry.remote,
+			entry.userAgent,
+			entry.requestID,
+		)
+	}
+}
+
+// The bounded queue keeps stdout I/O from blocking request handlers. Under sustained
+// log backpressure, dropping an access record protects application latency and stability.
+func (l *asyncAccessLogger) enqueue(entry requestLogEntry) {
+	select {
+	case l.entries <- entry:
+	default:
+	}
+}
+
+func (l *asyncAccessLogger) shutdown() {
+	l.shutdownOnce.Do(func() {
+		close(l.entries)
+		<-l.done
+	})
+}
+
+func requestLogger(next http.Handler) http.Handler {
+	return requestLoggerWithAccessLog(next, defaultAccessLogger)
+}
+
+func requestLoggerWithAccessLog(next http.Handler, accessLogger *asyncAccessLogger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		response := &loggingResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(response, r)
+
+		status := response.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		accessLogger.enqueue(requestLogEntry{
+			method:    r.Method,
+			path:      r.URL.Path,
+			query:     r.URL.RawQuery,
+			status:    status,
+			bytes:     response.bytes,
+			duration:  time.Since(started).Milliseconds(),
+			remote:    r.RemoteAddr,
+			userAgent: r.UserAgent(),
+			requestID: r.Header.Get("X-Request-ID"),
+		})
+	})
 }
 
 func getenv(key, fallback string) string {
