@@ -73,6 +73,10 @@ Route values can still differ from the old service when the underlying graph or
 routing engine differs. Both incoming profiles intentionally use the driving
 OSRM graph during this migration.
 
+The ORS-compatible readiness endpoint is also available at
+`GET http://ors-compat:80/ors/v2/health`. It probes the configured OSRM upstream
+and returns `{"status":"ready"}` only when that upstream responds successfully.
+
 The sidecar is a migration aid, not a permanent public API. Once clients use a
 native internal facade or OSRM directly, remove the `ors-compat` service and
 the old ORS-shaped route contract together.
