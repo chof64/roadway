@@ -57,6 +57,36 @@ func TestDirectionsHandlerTranslatesUpstreamRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestORSHealthEndpointReportsOSRMReadiness(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/route/v1/driving/121.056,14.676;121.058,14.678" {
+			t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	upstreamURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &application{upstream: upstreamURL, client: upstream.Client()}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ors/v2/health", nil)
+	newHandler(app).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d, body: %s", recorder.Code, recorder.Body.String())
+	}
+	var response map[string]string
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response["status"] != "ready" {
+		t.Fatalf("unexpected health response: %#v", response)
+	}
+}
+
 func TestDirectionsHandlerRejectsUnsupportedInput(t *testing.T) {
 	app := &application{}
 	recorder := httptest.NewRecorder()

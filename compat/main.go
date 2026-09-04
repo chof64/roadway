@@ -28,18 +28,9 @@ func main() {
 		upstream: upstream,
 		client:   &http.Client{Timeout: 15 * time.Second},
 	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", healthHandler)
-	mux.HandleFunc("/readyz", app.readyHandler)
-	for _, profile := range supportedProfiles {
-		mux.HandleFunc("/ors/v2/directions/"+profile, app.directionsHandler)
-		mux.HandleFunc("/ors/v2/matrix/"+profile, app.matrixHandler)
-		mux.HandleFunc("/ors/v2/snap/"+profile, app.snapHandler)
-	}
-
 	server := &http.Server{
 		Addr:              getenv("LISTEN_ADDR", ":80"),
-		Handler:           mux,
+		Handler:           newHandler(app),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -50,6 +41,19 @@ func main() {
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+}
+
+func newHandler(app *application) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", healthHandler)
+	mux.HandleFunc("/readyz", app.readyHandler)
+	mux.HandleFunc("/ors/v2/health", app.readyHandler)
+	for _, profile := range supportedProfiles {
+		mux.HandleFunc("/ors/v2/directions/"+profile, app.directionsHandler)
+		mux.HandleFunc("/ors/v2/matrix/"+profile, app.matrixHandler)
+		mux.HandleFunc("/ors/v2/snap/"+profile, app.snapHandler)
+	}
+	return mux
 }
 
 func getenv(key, fallback string) string {
