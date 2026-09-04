@@ -65,6 +65,11 @@ LABEL org.opencontainers.image.variant="${OSRM_PROFILE}" \
 
 EXPOSE 80
 
+# Probe a real route so Docker reports the service unhealthy if the HTTP
+# listener is up but the compiled graph is not available.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/80; printf 'GET /route/v1/driving/121.056,14.676;121.058,14.678?overview=false HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; IFS= read -r status <&3; case \"$status\" in HTTP/*\\ 200\\ *) exit 0 ;; *) exit 1 ;; esac"]
+
 # mmap keeps the compiled graph file-backed instead of eagerly copying the
 # complete graph into anonymous memory. Route steps remain enabled so clients
 # can inspect access classes emitted by the permissive profile.

@@ -38,6 +38,10 @@ ORS compatibility URL: http://ors-compat:80
 Photon base URL: http://photon:80
 ```
 
+The OSRM image includes a Docker healthcheck that requests a route from the
+compiled graph. Compose waits for OSRM to become healthy before starting the
+`ors-compat` sidecar.
+
 ### Temporary ORS compatibility sidecar
 
 `ors-compat` preserves the ORS-shaped routing contract while the application
