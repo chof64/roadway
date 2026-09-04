@@ -81,6 +81,42 @@ The sidecar is a migration aid, not a permanent public API. Once clients use a
 native internal facade or OSRM directly, remove the `ors-compat` service and
 the old ORS-shaped route contract together.
 
+#### Browser and mobile access
+
+CORS is disabled by default. Set `CORS_ENABLED=true` and provide
+`CORS_ALLOWED_ORIGINS` to enable it. The origin value is a comma-separated list
+of exact origins; wildcard `*` is intentionally rejected. Configure the origins
+of the web applications that are allowed to call the public compat endpoint,
+not the endpoint's own hostname:
+
+```sh
+CORS_ENABLED=true
+CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
+```
+
+The sidecar also accepts requests without an `Origin` header. This is the
+normal behavior for native Android and iOS clients, including Flutter mobile
+apps, because those clients are not subject to browser CORS. Hybrid apps that
+run web content must list their exact webview origin, for example
+`capacitor://localhost` or `http://localhost`.
+
+For local `file://` HTML testing only, `Origin: null` can be added to the
+allowlist. Do not include `null` in a production allowlist unless local-file
+access is deliberately required. `CORS_ALLOWED_HEADERS` defaults to
+`Content-Type, X-Request-ID`; set it explicitly if a browser client needs an
+additional non-safelisted header such as `Authorization`:
+
+```sh
+CORS_ENABLED=true \
+CORS_ALLOWED_ORIGINS=https://app.example.com,capacitor://localhost \
+CORS_ALLOWED_HEADERS=Content-Type,X-Request-ID,Authorization \
+docker compose up -d ors-compat
+```
+
+The allowlist middleware handles `OPTIONS` preflight requests and adds the
+matching `Access-Control-Allow-Origin` header to successful and error
+responses. Native clients do not need a CORS configuration.
+
 These names resolve only inside the Docker network. To access the containers
 from the host, publish ports explicitly, for example:
 

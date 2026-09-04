@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -34,9 +35,17 @@ func main() {
 		upstream: upstream,
 		client:   &http.Client{Timeout: 15 * time.Second},
 	}
+	corsEnabled, err := strconv.ParseBool(getenv("CORS_ENABLED", "false"))
+	if err != nil {
+		log.Fatalf("invalid CORS_ENABLED: %v", err)
+	}
+	cors, err := newCORSConfig(corsEnabled, os.Getenv("CORS_ALLOWED_ORIGINS"), getenv("CORS_ALLOWED_HEADERS", defaultCORSAllowedHeaders))
+	if err != nil {
+		log.Fatalf("invalid CORS configuration: %v", err)
+	}
 	server := &http.Server{
 		Addr:              getenv("LISTEN_ADDR", ":80"),
-		Handler:           newHandler(app),
+		Handler:           requestLogger(cors.handler(newRouter(app))),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -50,6 +59,10 @@ func main() {
 }
 
 func newHandler(app *application) http.Handler {
+	return requestLogger(newRouter(app))
+}
+
+func newRouter(app *application) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler)
 	mux.HandleFunc("/readyz", app.readyHandler)
@@ -59,7 +72,7 @@ func newHandler(app *application) http.Handler {
 		mux.HandleFunc("/ors/v2/matrix/"+profile, app.matrixHandler)
 		mux.HandleFunc("/ors/v2/snap/"+profile, app.snapHandler)
 	}
-	return requestLogger(mux)
+	return mux
 }
 
 type loggingResponseWriter struct {
