@@ -65,6 +65,7 @@ func newHandler(app *application) http.Handler {
 func newRouter(app *application) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler)
+	mux.HandleFunc("/up", app.upHandler)
 	mux.HandleFunc("/readyz", app.readyHandler)
 	mux.HandleFunc("/ors/v2/health", app.readyHandler)
 	for _, profile := range supportedProfiles {
@@ -224,6 +225,14 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) readyHandler(w http.ResponseWriter, r *http.Request) {
+	app.upstreamHandler(w, r, "ready")
+}
+
+func (app *application) upHandler(w http.ResponseWriter, r *http.Request) {
+	app.upstreamHandler(w, r, "up")
+}
+
+func (app *application) upstreamHandler(w http.ResponseWriter, r *http.Request, status string) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		writeError(w, http.StatusMethodNotAllowed, http.StatusMethodNotAllowed, "method not allowed")
@@ -250,7 +259,7 @@ func (app *application) readyHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, http.StatusServiceUnavailable, "OSRM upstream is not ready")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"}, "application/json")
+	writeJSON(w, http.StatusOK, map[string]string{"status": status}, "application/json")
 }
 
 func (app *application) directionsHandler(w http.ResponseWriter, r *http.Request) {

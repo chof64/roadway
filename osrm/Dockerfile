@@ -7,6 +7,17 @@ ARG OSRM_VERSION=26.7.3
 ARG OSRM_PROFILE=restrictive
 ARG OSRM_DATA_VERSION=latest
 
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS health-proxy-builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /src
+COPY health-proxy/go.mod ./go.mod
+COPY health-proxy/main.go ./
+RUN CGO_ENABLED=0 GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" \
+  go build -trimpath -ldflags='-s -w' -o /out/health-proxy .
+
 FROM alpine:3.22 AS downloader
 
 ARG PBF_URL=https://download.geofabrik.de/asia/philippines-latest.osm.pbf
@@ -14,7 +25,7 @@ ARG PBF_SHA256=
 ARG PBF_FILE=philippines.osm.pbf
 ARG OSRM_DATA_VERSION=latest
 
-COPY . /build-context/
+COPY osrm/ /build-context/
 
 RUN apk add --no-cache ca-certificates curl \
   && mkdir -p /input \
@@ -35,7 +46,7 @@ ARG OSRM_PROFILE=restrictive
 
 WORKDIR /data
 COPY --from=downloader /input/philippines.osm.pbf /data/philippines.osm.pbf
-COPY profiles/ /profiles/
+COPY osrm/profiles/ /profiles/
 
 # CH is a good first fit for this deployment: the graph is static between data
 # refreshes and there is no live-traffic customization requirement. If that
@@ -59,19 +70,22 @@ ARG OSRM_PROFILE=restrictive
 ARG OSRM_DATA_VERSION=latest
 
 COPY --from=builder /data/philippines.osrm* /data/
+COPY --from=health-proxy-builder /out/health-proxy /usr/local/bin/health-proxy
 
 LABEL org.opencontainers.image.variant="${OSRM_PROFILE}" \
       org.opencontainers.image.version="${OSRM_DATA_VERSION}"
 
 EXPOSE 80
 
+ENV UPSTREAM_UP_PATH="/route/v1/driving/121.056,14.676;121.058,14.678?overview=false"
+
 # Probe a real route so Docker reports the service unhealthy if the HTTP
 # listener is up but the compiled graph is not available.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD ["bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/80; printf 'GET /route/v1/driving/121.056,14.676;121.058,14.678?overview=false HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; IFS= read -r status <&3; case \"$status\" in HTTP/*\\ 200\\ *) exit 0 ;; *) exit 1 ;; esac"]
+  CMD ["bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/80; printf 'GET /up HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; IFS= read -r status <&3; case \"$status\" in HTTP/*\\ 200\\ *) exit 0 ;; *) exit 1 ;; esac"]
 
 # mmap keeps the compiled graph file-backed instead of eagerly copying the
 # complete graph into anonymous memory. Route steps remain enabled so clients
 # can inspect access classes emitted by the permissive profile.
-ENTRYPOINT ["osrm-routed"]
-CMD ["/data/philippines.osrm", "--algorithm", "ch", "--mmap", "--port", "80"]
+ENTRYPOINT ["/usr/local/bin/health-proxy", "--"]
+CMD ["osrm-routed", "/data/philippines.osrm", "--algorithm", "ch", "--mmap", "--port", "8080"]

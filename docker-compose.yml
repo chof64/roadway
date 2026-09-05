@@ -2,8 +2,8 @@ services:
   osrm:
     image: ghcr.io/chof64/roadway-osrm:${ROUTING_VARIANT:-restrictive}
     build:
-      context: ./osrm
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: osrm/Dockerfile
       args:
         OSRM_PROFILE: ${ROUTING_VARIANT:-restrictive}
         OSRM_DATA_VERSION: ${ROUTING_DATA_VERSION:-local}
@@ -17,8 +17,8 @@ services:
     profiles: [dual-routing]
     image: ghcr.io/chof64/roadway-osrm:restrictive
     build:
-      context: ./osrm
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: osrm/Dockerfile
       args:
         OSRM_PROFILE: restrictive
         OSRM_DATA_VERSION: ${ROUTING_DATA_VERSION:-local}
@@ -30,8 +30,8 @@ services:
     profiles: [dual-routing]
     image: ghcr.io/chof64/roadway-osrm:permissive
     build:
-      context: ./osrm
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: osrm/Dockerfile
       args:
         OSRM_PROFILE: permissive
         OSRM_DATA_VERSION: ${ROUTING_DATA_VERSION:-local}
@@ -60,8 +60,8 @@ services:
   photon:
     image: ghcr.io/chof64/roadway-photon:local
     build:
-      context: ./photon
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: photon/Dockerfile
     expose:
       - "80"
     restart: unless-stopped

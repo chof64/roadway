@@ -1,5 +1,16 @@
 # syntax=docker/dockerfile:1
 
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS health-proxy-builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /src
+COPY health-proxy/go.mod ./go.mod
+COPY health-proxy/main.go ./
+RUN CGO_ENABLED=0 GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" \
+  go build -trimpath -ldflags='-s -w' -o /out/health-proxy .
+
 # Build-time image: download a Photon dump and create the Lucene/OpenSearch
 # index. The runtime stage contains only the Photon JAR and the index.
 FROM eclipse-temurin:21-jre-jammy AS builder
@@ -47,7 +58,7 @@ ARG PHOTON_VERSION=1.2.1
 
 ENV PHOTON_HOME=/photon \
     PHOTON_DATA_DIR=/photon/data \
-    PHOTON_LISTEN_PORT=80 \
+    PHOTON_LISTEN_PORT=8080 \
     JAVA_OPTS=-Xmx1G
 
 RUN apt-get update \
@@ -58,6 +69,7 @@ RUN apt-get update \
 
 COPY --from=builder /photon/photon.jar /photon/photon.jar
 COPY --from=builder /photon/data/ /photon/data/
+COPY --from=health-proxy-builder /out/health-proxy /usr/local/bin/health-proxy
 
 RUN chown -R photon:photon "${PHOTON_HOME}"
 
@@ -66,10 +78,13 @@ USER photon
 
 EXPOSE 80
 
+ENV UPSTREAM_UP_PATH=/status
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -fsS "http://127.0.0.1:${PHOTON_LISTEN_PORT}/status" | grep -q '"status":"Ok"'
+  CMD curl -fsS http://127.0.0.1:80/up | grep -q '"status":"up"'
 
 # CORS is deliberately not enabled by default. Keep Photon behind an
 # application service or set an explicit CORS option in the deployment if
 # browser clients need to call it directly.
-CMD ["sh", "-c", "exec java $JAVA_OPTS -jar $PHOTON_HOME/photon.jar serve -data-dir $PHOTON_DATA_DIR -listen-ip 0.0.0.0 -listen-port $PHOTON_LISTEN_PORT -max-reverse-results 1 -query-timeout 2"]
+ENTRYPOINT ["/usr/local/bin/health-proxy", "--"]
+CMD ["sh", "-c", "exec java $JAVA_OPTS -jar $PHOTON_HOME/photon.jar serve -data-dir $PHOTON_DATA_DIR -listen-ip 127.0.0.1 -listen-port $PHOTON_LISTEN_PORT -max-reverse-results 1 -query-timeout 2"]

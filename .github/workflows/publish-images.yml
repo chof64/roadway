@@ -95,10 +95,10 @@ jobs:
       matrix:
         include:
           - variant: restrictive
-            context: ./osrm
+            context: .
             dockerfile: ./osrm/Dockerfile
           - variant: permissive
-            context: ./osrm
+            context: .
             dockerfile: ./osrm/Dockerfile
 
     steps:
@@ -182,7 +182,7 @@ jobs:
         include:
           - service: photon
             variant: default
-            context: ./photon
+            context: .
             dockerfile: ./photon/Dockerfile
           - service: ors-compat
             variant: default

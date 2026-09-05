@@ -38,9 +38,16 @@ ORS compatibility URL: http://ors-compat:80
 Photon base URL: http://photon:80
 ```
 
-The OSRM image includes a Docker healthcheck that requests a route from the
-compiled graph. Compose waits for OSRM to become healthy before starting the
-`ors-compat` sidecar.
+Every service exposes `GET /up`, returning HTTP 200 with `{"status":"up"}`
+when its underlying service is responding successfully. Use this endpoint for
+uptime monitoring:
+
+```sh
+curl 'http://<service-host>:<service-port>/up'
+```
+
+Each image includes a Docker healthcheck using `/up`. Compose waits for OSRM to
+become healthy before starting the `ors-compat` sidecar.
 
 ### Temporary ORS compatibility sidecar
 
@@ -191,8 +198,11 @@ The response is GeoJSON. `lon` and `lat` are required; `limit` is capped at one
 by the container configuration. The health endpoint is:
 
 ```sh
-curl 'http://photon:80/status'
+curl 'http://photon:80/up'
 ```
+
+Photon's native `/status` endpoint remains available behind the common `/up`
+endpoint.
 
 Forward-search endpoints such as `/api` and `/structured` are intentionally
 unavailable in the default reverse-only image.
@@ -207,15 +217,15 @@ docker build \
   --build-arg OSRM_DATA_VERSION=local \
   -f osrm/Dockerfile \
   -t ghcr.io/chof64/roadway-osrm:restrictive \
-  osrm
+  .
 
 docker build \
   --build-arg OSRM_PROFILE=permissive \
   --build-arg OSRM_DATA_VERSION=local \
   -f osrm/Dockerfile \
   -t ghcr.io/chof64/roadway-osrm:permissive \
-  osrm
-docker build -f photon/Dockerfile -t ghcr.io/chof64/roadway-photon:local photon
+  .
+docker build -f photon/Dockerfile -t ghcr.io/chof64/roadway-photon:local .
 docker build -f compat/Dockerfile -t ghcr.io/chof64/roadway-ors-compat:local compat
 ```
 
@@ -234,7 +244,7 @@ docker build \
   --build-arg OSRM_DATA_VERSION=<data-version> \
   -f osrm/Dockerfile \
   -t ghcr.io/chof64/roadway-osrm:<data-version>-restrictive \
-  osrm
+  .
 
 docker build \
   --build-arg PBF_URL=https://download.geofabrik.de/asia/philippines-latest.osm.pbf \
@@ -243,14 +253,14 @@ docker build \
   --build-arg OSRM_DATA_VERSION=<data-version> \
   -f osrm/Dockerfile \
   -t ghcr.io/chof64/roadway-osrm:<data-version>-permissive \
-  osrm
+  .
 
 docker build \
   --build-arg PHOTON_DATA_VERSION=<data-version> \
   --build-arg PHOTON_DUMP_SHA256=<sha256> \
   -f photon/Dockerfile \
   -t ghcr.io/chof64/roadway-photon:<data-version> \
-  photon
+  .
 ```
 
 The date-plus-variant tag is the reproducible deployment pin. The automated
