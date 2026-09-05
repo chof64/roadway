@@ -59,7 +59,7 @@ func TestDirectionsHandlerTranslatesUpstreamRequestAndResponse(t *testing.T) {
 	}
 }
 
-func TestORSHealthEndpointReportsOSRMReadiness(t *testing.T) {
+func TestUpEndpointsReportOSRMReadiness(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/route/v1/driving/121.056,14.676;121.058,14.678" {
 			t.Fatalf("unexpected upstream path: %s", r.URL.Path)
@@ -73,19 +73,29 @@ func TestORSHealthEndpointReportsOSRMReadiness(t *testing.T) {
 		t.Fatal(err)
 	}
 	app := &application{upstream: upstreamURL, client: upstream.Client()}
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/ors/v2/health", nil)
-	newHandler(app).ServeHTTP(recorder, request)
+	for _, test := range []struct {
+		path   string
+		status string
+	}{
+		{path: "/ors/v2/health", status: "ready"},
+		{path: "/up", status: "up"},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, test.path, nil)
+			newHandler(app).ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("unexpected status: %d, body: %s", recorder.Code, recorder.Body.String())
-	}
-	var response map[string]string
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Fatal(err)
-	}
-	if response["status"] != "ready" {
-		t.Fatalf("unexpected health response: %#v", response)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("unexpected status: %d, body: %s", recorder.Code, recorder.Body.String())
+			}
+			var response map[string]string
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if response["status"] != test.status {
+				t.Fatalf("unexpected health response: %#v", response)
+			}
+		})
 	}
 }
 

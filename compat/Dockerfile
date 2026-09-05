@@ -20,6 +20,6 @@ USER compat
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:80/healthz >/dev/null
+  CMD wget -qO- http://127.0.0.1:80/up >/dev/null
 
 ENTRYPOINT ["/usr/local/bin/ors-compat"]
