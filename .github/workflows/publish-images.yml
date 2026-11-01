@@ -171,20 +171,11 @@ jobs:
           cache-to: type=gha,mode=max,scope=roadway-osrm-${{ matrix.variant }}
 
       - name: Verify published image
-        env:
-          IMAGE: ${{ steps.image.outputs.name }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          set -euo pipefail
-          docker buildx imagetools inspect "${IMAGE}@${DIGEST}"
-          raw="$(docker buildx imagetools inspect "${IMAGE}@${DIGEST}" --raw)"
-          for arch in amd64 arm64; do
-            echo "Checking for linux/${arch} manifest..."
-            printf '%s' "${raw}" | grep -q "\"architecture\": \"${arch}\""
-          done
-          echo "Running per-arch binary smoke checks..."
-          docker run --rm --platform linux/amd64 --entrypoint uname "${IMAGE}@${DIGEST}" -m
-          docker run --rm --platform linux/arm64 --entrypoint uname "${IMAGE}@${DIGEST}" -m
+        uses: ./.github/actions/verify-image
+        with:
+          image: ${{ steps.image.outputs.name }}
+          digest: ${{ steps.build.outputs.digest }}
+          service: osrm
 
   build-services:
     name: Build ${{ matrix.service }}
@@ -263,17 +254,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=roadway-${{ matrix.service }}-${{ matrix.variant }}
 
       - name: Verify published image
-        env:
-          IMAGE: ${{ steps.image.outputs.name }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          set -euo pipefail
-          docker buildx imagetools inspect "${IMAGE}@${DIGEST}"
-          raw="$(docker buildx imagetools inspect "${IMAGE}@${DIGEST}" --raw)"
-          for arch in amd64 arm64; do
-            echo "Checking for linux/${arch} manifest..."
-            printf '%s' "${raw}" | grep -q "\"architecture\": \"${arch}\""
-          done
-          echo "Running per-arch binary smoke checks..."
-          docker run --rm --platform linux/amd64 --entrypoint uname "${IMAGE}@${DIGEST}" -m
-          docker run --rm --platform linux/arm64 --entrypoint uname "${IMAGE}@${DIGEST}" -m
+        uses: ./.github/actions/verify-image
+        with:
+          image: ${{ steps.image.outputs.name }}
+          digest: ${{ steps.build.outputs.digest }}
+          service: ${{ matrix.service }}
