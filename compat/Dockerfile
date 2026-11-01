@@ -1,13 +1,16 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.23-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /src
 COPY go.mod ./
 COPY *.go ./
 RUN gofmt -w *.go \
   && go test ./... \
-  && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/ors-compat .
+  && CGO_ENABLED=0 GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" go build -trimpath -ldflags='-s -w' -o /out/ors-compat .
 
 FROM alpine:3.22
 
