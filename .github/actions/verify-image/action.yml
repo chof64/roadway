@@ -1,0 +1,69 @@
+name: Verify published multi-arch image
+description: Assert both arch manifests exist and smoke-test the shipped binary per arch.
+
+inputs:
+  image:
+    description: Image name without digest (e.g. ghcr.io/owner/roadway-osrm)
+    required: true
+  digest:
+    description: Pushed image digest (e.g. sha256:...)
+    required: true
+  service:
+    description: Service that owns the image (osrm, photon, or ors-compat)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Verify manifests and per-arch binaries
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        DIGEST: ${{ inputs.digest }}
+        SERVICE: ${{ inputs.service }}
+      run: |
+        set -euo pipefail
+        docker buildx imagetools inspect "${IMAGE}@${DIGEST}"
+        raw="$(docker buildx imagetools inspect "${IMAGE}@${DIGEST}" --raw)"
+        for arch in amd64 arm64; do
+          echo "Checking for linux/${arch} manifest..."
+          printf '%s' "${raw}" | grep -Eq "\"architecture\": *\"${arch}\""
+        done
+        echo "Running per-arch binary smoke checks..."
+        for arch in amd64 arm64; do
+          case "${SERVICE}" in
+            osrm|photon)
+              # health-proxy requires "--" plus an upstream command; `true`
+              # exits at once, so an exec failure here means a wrong-arch binary.
+              docker run --rm --platform "linux/${arch}" \
+                --entrypoint /usr/local/bin/health-proxy \
+                "${IMAGE}@${DIGEST}" -- true
+              ;;
+            ors-compat)
+              # /healthz is static (no OSRM upstream needed, unlike /up).
+              name="ors-compat-smoke-${arch}"
+              docker rm -f "${name}" >/dev/null 2>&1 || true
+              docker run -d --platform "linux/${arch}" --name "${name}" \
+                --entrypoint /usr/local/bin/ors-compat "${IMAGE}@${DIGEST}" \
+                >/dev/null
+              ok=0
+              for i in $(seq 1 30); do
+                if docker exec "${name}" wget -qO- http://127.0.0.1:80/healthz 2>/dev/null \
+                  | grep -q '"status":"ok"'; then
+                  ok=1
+                  break
+                fi
+                sleep 1
+              done
+              docker rm -f "${name}" >/dev/null
+              if [ "${ok}" -ne 1 ]; then
+                echo "ors-compat smoke check failed for linux/${arch}" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "unknown service: ${SERVICE}" >&2
+              exit 1
+              ;;
+          esac
+        done
